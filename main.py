@@ -1,7 +1,14 @@
+import os
 import requests
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+import schedule
+import time
+from dotenv import load_dotenv
+
+# Carrega as variáveis de ambiente (apenas para testes locais)
+load_dotenv()
 
 # Função para baixar o arquivo XLSX
 def baixar_arquivo_xlsx(url, nome_arquivo):
@@ -11,10 +18,10 @@ def baixar_arquivo_xlsx(url, nome_arquivo):
     print(f"Arquivo {nome_arquivo} baixado com sucesso.")
 
 # Função para atualizar Google Sheets
-def atualizar_google_sheet(nome_arquivo, sheet_name, sheet_id):
+def atualizar_google_sheet(nome_arquivo, sheet_name, sheet_id, credenciais_json):
     # Configurações de autenticação com o Google Sheets
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_name("caminho/para/suas/credenciais.json", scope)
+    creds = ServiceAccountCredentials.from_json_keyfile_name(credenciais_json, scope)
     client = gspread.authorize(creds)
 
     # Abre a planilha pelo ID
@@ -32,14 +39,25 @@ def atualizar_google_sheet(nome_arquivo, sheet_name, sheet_id):
     worksheet.update(dados)
     print("Google Sheet atualizada com sucesso.")
 
-# URL do arquivo XLSX para download
-url_arquivo = "URL_DO_ARQUIVO_XLSX"
-nome_arquivo = "arquivo.xlsx"
+# Função que combina o download e atualização
+def executar_tarefa():
+    # Carrega as variáveis de ambiente
+    url_arquivo = os.getenv("URL_ARQUIVO_XLSX")
+    nome_arquivo = "arquivo.xlsx"
+    sheet_name = os.getenv("SHEET_NAME")
+    sheet_id = os.getenv("SHEET_ID")
+    credenciais_json = os.getenv("GOOGLE_CREDENTIALS_JSON_PATH")
 
-# Informações da Google Sheet
-sheet_name = "Nome_da_Sheet"
-sheet_id = "ID_DA_PLANILHA"
+    # Executa o download e atualização da planilha
+    baixar_arquivo_xlsx(url_arquivo, nome_arquivo)
+    atualizar_google_sheet(nome_arquivo, sheet_name, sheet_id, credenciais_json)
 
-# Executa o download e atualização da planilha
-baixar_arquivo_xlsx(url_arquivo, nome_arquivo)
-atualizar_google_sheet(nome_arquivo, sheet_name, sheet_id)
+# Agenda a tarefa para rodar a cada 24 horas
+schedule.every(24).hours.do(executar_tarefa)
+
+print("Agendamento iniciado. O script será executado a cada 24 horas.")
+
+# Mantém o script em execução para verificar o agendamento
+while True:
+    schedule.run_pending()
+    time.sleep(60)  # Verifica a cada minuto se há tarefas agendadas
