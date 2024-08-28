@@ -1,8 +1,10 @@
 import os
 import requests
 import pandas as pd
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
 from dotenv import load_dotenv
 import json
 
@@ -18,15 +20,20 @@ def baixar_arquivo_xlsx(url, nome_arquivo):
 
 # Função para atualizar Google Sheets
 def atualizar_google_sheet(nome_arquivo, sheet_name, sheet_id, credenciais_json):
-    # Carrega as credenciais do JSON diretamente da string da variável de ambiente
-    creds_dict = json.loads(credenciais_json)
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-    client = gspread.authorize(creds)
+    # Cria o fluxo OAuth 2.0
+    flow = InstalledAppFlow.from_client_config(
+        json.loads(credenciais_json),
+        scopes=['https://www.googleapis.com/auth/spreadsheets']
+    )
+
+    # Realiza a autenticação e obtém as credenciais
+    creds = flow.run_local_server(port=0)
+
+    # Construa o serviço
+    service = build('sheets', 'v4', credentials=creds)
 
     # Abre a planilha pelo ID
-    sheet = client.open_by_key(sheet_id)
-    worksheet = sheet.worksheet(sheet_name)
+    sheet = service.spreadsheets()
 
     # Carrega os dados do XLSX usando Pandas
     df = pd.read_excel(nome_arquivo)
@@ -35,8 +42,15 @@ def atualizar_google_sheet(nome_arquivo, sheet_name, sheet_id, credenciais_json)
     dados = [df.columns.values.tolist()] + df.values.tolist()
 
     # Atualiza a Google Sheet com os dados
-    worksheet.clear()
-    worksheet.update(dados)
+    body = {
+        'values': dados
+    }
+    sheet.values().update(
+        spreadsheetId=sheet_id,
+        range=sheet_name,
+        valueInputOption='RAW',
+        body=body
+    ).execute()
     print("Google Sheet atualizada com sucesso.")
 
 # Função principal que combina o download e atualização
