@@ -29,7 +29,7 @@ def atualizar_google_sheet(nome_arquivo, sheet_name, sheet_id, credenciais_json)
     worksheet = sheet.worksheet(sheet_name)
 
     # Carrega os dados do XLSX usando Pandas
-    df = pd.read_excel(nome_arquivo)
+    df = pd.read_excel(nome_arquivo, engine='openpyxl')
 
     # Converte o DataFrame para lista de listas
     dados = [df.columns.values.tolist()] + df.values.tolist()
