@@ -4,6 +4,7 @@ import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from dotenv import load_dotenv
+import json
 
 # Carrega as variáveis de ambiente (apenas para testes locais)
 load_dotenv()
@@ -17,9 +18,10 @@ def baixar_arquivo_xlsx(url, nome_arquivo):
 
 # Função para atualizar Google Sheets
 def atualizar_google_sheet(nome_arquivo, sheet_name, sheet_id, credenciais_json):
-    # Configurações de autenticação com o Google Sheets
+    # Carrega as credenciais do JSON diretamente da string da variável de ambiente
+    creds_dict = json.loads(credenciais_json)
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_name(credenciais_json, scope)
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     client = gspread.authorize(creds)
 
     # Abre a planilha pelo ID
@@ -44,7 +46,7 @@ def executar_tarefa():
     nome_arquivo = "arquivo.xlsx"
     sheet_name = os.getenv("SHEET_NAME")
     sheet_id = os.getenv("SHEET_ID")
-    credenciais_json = os.getenv("GOOGLE_CREDENTIALS_JSON_PATH")
+    credenciais_json = os.getenv("GOOGLE_CREDENTIALS_JSON")  # Carrega o JSON das credenciais como string
 
     # Executa o download e atualização da planilha
     baixar_arquivo_xlsx(url_arquivo, nome_arquivo)
