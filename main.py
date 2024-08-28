@@ -3,8 +3,6 @@ import requests
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-import schedule
-import time
 from dotenv import load_dotenv
 
 # Carrega as variáveis de ambiente (apenas para testes locais)
@@ -39,7 +37,7 @@ def atualizar_google_sheet(nome_arquivo, sheet_name, sheet_id, credenciais_json)
     worksheet.update(dados)
     print("Google Sheet atualizada com sucesso.")
 
-# Função que combina o download e atualização
+# Função principal que combina o download e atualização
 def executar_tarefa():
     # Carrega as variáveis de ambiente
     url_arquivo = os.getenv("URL_ARQUIVO_XLSX")
@@ -52,12 +50,5 @@ def executar_tarefa():
     baixar_arquivo_xlsx(url_arquivo, nome_arquivo)
     atualizar_google_sheet(nome_arquivo, sheet_name, sheet_id, credenciais_json)
 
-# Agenda a tarefa para rodar a cada 24 horas
-schedule.every(24).hours.do(executar_tarefa)
-
-print("Agendamento iniciado. O script será executado a cada 24 horas.")
-
-# Mantém o script em execução para verificar o agendamento
-while True:
-    schedule.run_pending()
-    time.sleep(60)  # Verifica a cada minuto se há tarefas agendadas
+# Executa a tarefa uma vez
+executar_tarefa()
