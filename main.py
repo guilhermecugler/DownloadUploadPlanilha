@@ -10,6 +10,8 @@ import json
 import gspread
 import pandas as pd
 from oauth2client.service_account import ServiceAccountCredentials
+import numpy as np
+
 # Carrega as variáveis de ambiente
 load_dotenv()
 
@@ -276,7 +278,6 @@ def atualizar_google_sheet(nome_arquivo, sheet_name, sheet_id, credenciais_json)
         [0 if np.isnan(x) or np.isinf(x) else x for x in row]
         for row in dados
     ]
-
 
 
     # Atualiza a Google Sheet com os dados
