@@ -19,7 +19,7 @@ nome_arquivo_inventario = os.getenv("NOME_ARQUIVO_INVENTARIO")
 nome_arquivo_relatorio = os.getenv("NOME_ARQUIVO_RELATORIO")
 sheet_id_relatorio = os.getenv("SHEET_ID_RELATORIO")
 sheet_id_inventario = os.getenv("SHEET_ID_INVENTARIO")
-credenciais_json = os.getenv("F")  # Carrega o JSON das credenciais como string
+credenciais_json = os.getenv("GOOGLE_CREDENTIALS_JSON")  # Carrega o JSON das credenciais como string
 email = os.getenv("EMAIL")
 senha = os.getenv("SENHA")
 # Definindo os headers para as requisições
