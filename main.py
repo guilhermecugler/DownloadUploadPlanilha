@@ -310,12 +310,12 @@ def main():
         if habilitar_envio_relatorio == "SIM":
             report_response = generate_report(session, csrf_token)
 
-        # report_response = True
-        if report_response:
-            check_report_status(session, csrf_token)
-            if habilitar_envio_relatorio == "SIM":
-                atualizar_google_sheet(nome_arquivo_relatorio, sheet_name, sheet_id_relatorio, credenciais_json)
-            
+            # report_response = True
+            if report_response:
+                check_report_status(session, csrf_token)
+                if habilitar_envio_relatorio == "SIM":
+                    atualizar_google_sheet(nome_arquivo_relatorio, sheet_name, sheet_id_relatorio, credenciais_json)
+                
         else:
             print("Falha ao gerar o relatório.")
     else:
