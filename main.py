@@ -250,12 +250,7 @@ def download_report(link, session):
 
 def atualizar_google_sheet(nome_arquivo, sheet_name, sheet_id, credenciais_json):
     # Carrega as credenciais do JSON diretamente da string da variável de ambiente
-    print("antes")
-    print(credenciais_json)
     creds_dict = json.loads(credenciais_json)
-    print("depois")
-    print(creds_dict)
-   
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     client = gspread.authorize(creds)
@@ -272,9 +267,16 @@ def atualizar_google_sheet(nome_arquivo, sheet_name, sheet_id, credenciais_json)
 
 
     # Sanitizando dados
-    sanitized_data = [[str(value) if isinstance(value, float) and (value != value or value in (float('inf'), -float('inf'))) else value for value in row] for row in dados]
+    # sanitized_data = [[str(value) if isinstance(value, float) and (value != value or value in (float('inf'), -float('inf'))) else value for value in row] for row in dados]
 
-
+    # Sanitizando os dados: Substituir NaN, Infinity, -Infinity por strings vazias
+    sanitized_data = [
+        [
+            "" if isinstance(value, float) and (value != value or value in (float('inf'), -float('inf'))) else value
+            for value in row
+        ]
+        for row in dados
+    ]
 
     # Atualiza a Google Sheet com os dados
     worksheet.clear()
@@ -299,9 +301,9 @@ def main():
 
     if perform_login(session, csrf_token):
         download_inventory(session, csrf_token)
-        # report_response = generate_report(session, csrf_token)
+        report_response = generate_report(session, csrf_token)
 
-        report_response = True
+        # report_response = True
         if report_response:
             check_report_status(session, csrf_token)
         else:
