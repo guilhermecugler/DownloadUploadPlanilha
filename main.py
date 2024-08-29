@@ -24,6 +24,8 @@ sheet_id_inventario = os.getenv("SHEET_ID_INVENTARIO")
 credenciais_json = os.getenv("GOOGLE_CREDENTIALS_JSON")  # Carrega o JSON das credenciais como string
 email = os.getenv("EMAIL")
 senha = os.getenv("SENHA")
+habilitar_envio_inventario = os.getenv("HABILITAR_ENVIO_INVENTARIO")
+habilitar_envio_relatorio = os.getenv("HABILITAR_ENVIO_RELATORIO")
 # Definindo os headers para as requisições
 headers = {
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
@@ -310,9 +312,17 @@ def main():
             print("Falha ao gerar o relatório.")
     else:
         print("Falha no login.")
-    atualizar_google_sheet(nome_arquivo_inventario, sheet_name, sheet_id_inventario, credenciais_json)
-    atualizar_google_sheet(nome_arquivo_relatorio, sheet_name, sheet_id_relatorio, credenciais_json)
-    delete_all_xlsx_files()
+        
+    if habilitar_envio_inventario == "SIM":
+        atualizar_google_sheet(nome_arquivo_inventario, sheet_name, sheet_id_inventario, credenciais_json)
+
+    if habilitar_envio_relatorio == "SIM":
+        atualizar_google_sheet(nome_arquivo_relatorio, sheet_name, sheet_id_relatorio, credenciais_json)
+    
+    try:
+        delete_all_xlsx_files()
+    except:
+        print("Sem arquivos para excluir")
 
 if __name__ == '__main__':
     main()
