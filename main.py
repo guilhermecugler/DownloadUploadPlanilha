@@ -268,11 +268,20 @@ def atualizar_google_sheet(nome_arquivo, sheet_name, sheet_id, credenciais_json)
     # Converte o DataFrame para lista de listas
     dados = [df.columns.values.tolist()] + df.values.tolist()
 
-    print(dados)
+    # Supondo que 'dados' seja uma lista de listas (ou DataFrame do pandas)
+    dados = [[1.0, 2.0, float('NaN')], [float('inf'), 5.0, -float('inf')]]
+
+    # Sanitizando dados
+    sanitized_data = [
+        [0 if np.isnan(x) or np.isinf(x) else x for x in row]
+        for row in dados
+    ]
+
+
 
     # Atualiza a Google Sheet com os dados
     worksheet.clear()
-    worksheet.update(dados)
+    worksheet.update(sanitized_data)
     print("Google Sheet atualizada com sucesso.")
 
 def delete_all_xlsx_files():
