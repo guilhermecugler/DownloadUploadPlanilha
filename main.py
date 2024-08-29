@@ -270,14 +270,10 @@ def atualizar_google_sheet(nome_arquivo, sheet_name, sheet_id, credenciais_json)
     # Converte o DataFrame para lista de listas
     dados = [df.columns.values.tolist()] + df.values.tolist()
 
-    # Supondo que 'dados' seja uma lista de listas (ou DataFrame do pandas)
-    dados = [[1.0, 2.0, float('NaN')], [float('inf'), 5.0, -float('inf')]]
 
     # Sanitizando dados
-    sanitized_data = [
-        [0 if np.isnan(x) or np.isinf(x) else x for x in row]
-        for row in dados
-    ]
+    sanitized_data = [[str(value) if isinstance(value, float) and (value != value or value in (float('inf'), -float('inf'))) else value for value in row] for row in dados]
+
 
 
     # Atualiza a Google Sheet com os dados
