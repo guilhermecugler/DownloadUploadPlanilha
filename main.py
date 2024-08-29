@@ -248,7 +248,11 @@ def download_report(link, session):
 
 def atualizar_google_sheet(nome_arquivo, sheet_name, sheet_id, credenciais_json):
     # Carrega as credenciais do JSON diretamente da string da variável de ambiente
+    print("antes")
+    print(creds_dict)
     creds_dict = json.loads(credenciais_json)
+    print("depois")
+    print(creds_dict)
    
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
@@ -263,6 +267,8 @@ def atualizar_google_sheet(nome_arquivo, sheet_name, sheet_id, credenciais_json)
 
     # Converte o DataFrame para lista de listas
     dados = [df.columns.values.tolist()] + df.values.tolist()
+
+    print(dados)
 
     # Atualiza a Google Sheet com os dados
     worksheet.clear()
