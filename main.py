@@ -1,5 +1,4 @@
 from datetime import datetime
-import glob
 import os
 import time
 import requests
@@ -10,39 +9,29 @@ import json
 import gspread
 import pandas as pd
 from oauth2client.service_account import ServiceAccountCredentials
-import numpy as np
+from google.cloud import bigquery
 
 # Carrega as variáveis de ambiente
 load_dotenv()
 
-sheet_name = os.getenv("SHEET_NAME")
+# Variáveis de ambiente
+nome_aba_planilha_inventario = os.getenv("NOME_ABA_PLANILHA_INVENTARIO")
+nome_aba_planilha_relatorio = os.getenv("NOME_ABA_PLANILHA_RELATORIO")
 sheet_id = os.getenv("SHEET_ID")
 nome_arquivo_inventario = os.getenv("NOME_ARQUIVO_INVENTARIO")
 nome_arquivo_relatorio = os.getenv("NOME_ARQUIVO_RELATORIO")
-sheet_id_relatorio = os.getenv("SHEET_ID_RELATORIO")
-sheet_id_inventario = os.getenv("SHEET_ID_INVENTARIO")
-credenciais_json = os.getenv("GOOGLE_CREDENTIALS_JSON")  # Carrega o JSON das credenciais como string
+credenciais_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
 email = os.getenv("EMAIL")
 senha = os.getenv("SENHA")
 habilitar_envio_inventario = os.getenv("HABILITAR_ENVIO_INVENTARIO")
 habilitar_envio_relatorio = os.getenv("HABILITAR_ENVIO_RELATORIO")
-# Definindo os headers para as requisições
+tempo_maximo_espera_relatorio = int(os.getenv("TEMPO_MAXIMO_ESPERA_RELATORIO", 30)) * 60
+sheet_id_relatorio = os.getenv("SHEET_ID_RELATORIO")
+sheet_id_inventario = os.getenv("SHEET_ID_INVENTARIO")
+# Headers para requisições
 headers = {
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-    'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7,ja;q=0.6',
-    'Cache-Control': 'max-age=0',
-    'Connection': 'keep-alive',
-    'DNT': '1',
-    'Referer': 'https://casadomedico.stokki.com.br/pt-br/administrator/inventory',
-    'Sec-Fetch-Dest': 'document',
-    'Sec-Fetch-Mode': 'navigate',
-    'Sec-Fetch-Site': 'same-origin',
-    'Sec-Fetch-User': '?1',
-    'Upgrade-Insecure-Requests': '1',
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-    'sec-ch-ua': '"Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"',
-    'sec-ch-ua-mobile': '?0',
-    'sec-ch-ua-platform': '"Windows"',
 }
 
 def get_csrf_token(session):
@@ -50,25 +39,19 @@ def get_csrf_token(session):
     if response.status_code == 200:
         soup = BeautifulSoup(response.content, 'html.parser')
         csrf_token = soup.find('input', {'name': '_token'})
-        if csrf_token:
-            return csrf_token.get('value')
+        return csrf_token.get('value') if csrf_token else ''
     return ''
 
 def perform_login(session, csrf_token):
-    login_data = {
-        '_token': csrf_token,
-        'email': email,
-        'password': senha,
-    }
-    login_response = session.post('https://casadomedico.stokki.com.br/pt-br/login', headers=headers, data=login_data)
-    return login_response.status_code == 200
+    login_data = {'_token': csrf_token, 'email': email, 'password': senha}
+    response = session.post('https://casadomedico.stokki.com.br/pt-br/login', headers=headers, data=login_data)
+    return response.status_code == 200
 
 def download_inventory(session, csrf_token):
-    files = {'_token': (None, csrf_token)}
     response = session.post(
         'https://casadomedico.stokki.com.br/pt-br/administrator/inventory/excel',
         headers=headers,
-        files=files,
+        files={'_token': (None, csrf_token)},
     )
     if response.status_code == 200:
         with open(nome_arquivo_inventario, 'wb') as file:
@@ -78,52 +61,56 @@ def download_inventory(session, csrf_token):
         print(f"Erro ao baixar o inventário: {response.status_code}")
 
 def generate_report(session, csrf_token):
-
     url = 'https://casadomedico.stokki.com.br/pt-br/administrator/report/inventory/generate'
-
-    # Dados do formulário
     data = {
-        '_token': csrf_token,  # Substitua pelo token real
-        'report_name': 'Relatório de Produtos',  # Substitua pelos valores reais
-        'action': 'product',  # Substitua pela ação real
-        'type': 'today',  # Substitua pelo tipo real
+        '_token': csrf_token,
+        'report_name': 'Relatório de Produtos',
+        'action': 'product',
+        'type': 'today',
         'provider_id': '',
         'client_id': '1'
     }
-
-    # Crie um MultipartEncoder para enviar os dados como multipart/form-data
     encoder = MultipartEncoder(fields=data)
-
-    # Headers da requisição
-    headers = {
-        'Accept': '*/*',
-        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7,ja;q=0.6',
-        'Connection': 'keep-alive',
-        'Content-Type': encoder.content_type,
-        'DNT': '1',
-        'Origin': 'https://casadomedico.stokki.com.br',
-        'Referer': 'https://casadomedico.stokki.com.br/pt-br/administrator/report/inventory',
-        'Sec-Fetch-Dest': 'empty',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'same-origin',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-        'X-CSRF-TOKEN': csrf_token,  # Substitua pelo token real
-        'X-Requested-With': 'XMLHttpRequest'
-    }
-
-
-    # Enviar a requisição POST usando a sessão
+    headers['Content-Type'] = encoder.content_type
     response = session.post(url, headers=headers, data=encoder)
-
     return response.json() if response.status_code == 200 else None
 
 def check_report_status(session, csrf_token):
+
+    headers.update({
+                    'Accept': '*/*',
+                    'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7,ja;q=0.6',
+                    'Connection': 'keep-alive',
+                    'DNT': '1',
+                    'Referer': 'https://casadomedico.stokki.com.br/pt-br/administrator/report/export',
+                    'Sec-Fetch-Dest': 'empty',
+                    'Sec-Fetch-Mode': 'cors',
+                    'Sec-Fetch-Site': 'same-origin',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+                    'X-CSRF-TOKEN': csrf_token,
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'sec-ch-ua': '"Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"',
+                    'sec-ch-ua-mobile': '?0',
+                    'sec-ch-ua-platform': '"Windows"',
+                })
+
+    params = {
+        '_': '1725071879349',
+    }
+
+    atualizar_pedido = session.get('https://casadomedico.stokki.com.br/api/generate/report', params=params, headers=headers, timeout=30)
+    print(f"Atualizar pedido {atualizar_pedido}")
+
     url = 'https://casadomedico.stokki.com.br/pt-br/administrator/report/export/table'
     headers.update({
         'Accept': 'application/json, text/javascript, */*; q=0.01',
         'X-CSRF-TOKEN': csrf_token,
         'X-Requested-With': 'XMLHttpRequest',
     })
+
+
+
+
     params = {
         'draw': '1',
         'columns[0][data]': 'date',
@@ -190,88 +177,93 @@ def check_report_status(session, csrf_token):
     }
 
     start_time = time.time()
-    timeout = 30 * 60  # 30 minutos em segundos
-
-    while True:
-        current_time = time.time()
-        elapsed_time = current_time - start_time
-        formatted_time = datetime.fromtimestamp(current_time).strftime('%H:%M:%S')
-
-        if elapsed_time > timeout:
-            print("Tempo limite de 30 minutos alcançado.")
-            break
-
-        try:
-            response = session.get(url, params=params, headers=headers)
+    while time.time() - start_time < tempo_maximo_espera_relatorio:
+        response = session.get(url, params=params, headers=headers)
+        if response.status_code == 200:
             data = response.json()
             state = data.get('aaData', [{}])[0].get('state', '')
-            print(f"Estado atual: {state}")
-
-            if state == '<div class="text-center"><span class="badge badge-success badge-status">Disponível</span></div>':
+            if 'Disponível' in state:
                 print("Relatório disponível.")
                 action = data.get('aaData', [{}])[0].get('action', '')
                 download_link = action.split('href="')[1].split('"')[0]
                 download_report(download_link, session)
                 break
-            elif state == '<div class="text-center"><span class="badge badge-secondary badge-status">Em processamento</span></div>':
-                print(f"Relatório ainda em processamento, verificando novamente em 5 minutos. Hora atual: {formatted_time}")
-                time.sleep(300)  # Aguardar 5 minutos
-            elif data['error'] == "Unauthenticated.":
-                print("Tentando fazer login novamente...")
+            elif 'Em processamento' in state:
+                print("Relatório ainda em processamento, verificando novamente em 5 minutos.")
+                time.sleep(300)
+            elif data.get('error') == "Unauthenticated.":
+                print("Reautenticando...")
                 csrf_token = get_csrf_token(session)
+                headers.update({
+                            'Accept': 'application/json, text/javascript, */*; q=0.01',
+                            'X-CSRF-TOKEN': csrf_token,
+                            'X-Requested-With': 'XMLHttpRequest',
+                        })
                 if perform_login(session, csrf_token):
                     print("Login realizado com sucesso.")
                 else:
                     print("Falha ao realizar login.")
                     break
-            else:
-                print(response.status_code)
-                print(response.text)
-                print("Estado desconhecido ou erro na requisição.")
-                break
-        except requests.RequestException as e:
-            print(f"Erro na requisição: {e}")
-            print("Tentando fazer login novamente...")
+        elif response.status_code == 401:
+            print("Reautenticando...")
             csrf_token = get_csrf_token(session)
+            headers.update({
+                        'Accept': 'application/json, text/javascript, */*; q=0.01',
+                        'X-CSRF-TOKEN': csrf_token,
+                        'X-Requested-With': 'XMLHttpRequest',
+                    })
             if perform_login(session, csrf_token):
                 print("Login realizado com sucesso.")
             else:
                 print("Falha ao realizar login.")
                 break
-
+        else:
+            print(f"Erro {response.status_code}: {response.text}")
+            # break
 
 def download_report(link, session):
     response = session.get(link)
-    filename = nome_arquivo_relatorio
-    
-    with open(filename, 'wb') as file:
+    with open(nome_arquivo_relatorio, 'wb') as file:
         file.write(response.content)
-    
-    print(f'Relatório baixado como {filename}')
+    print(f'Relatório baixado como {nome_arquivo_relatorio}')
+
+def enviar_para_bigquery(nome_arquivo, dataset_id, table_id, credenciais_json):
+    # Carregar as credenciais do JSON
+    creds_dict = json.loads(credenciais_json)
+
+    # Configurar o cliente do BigQuery usando as credenciais
+    client = bigquery.Client.from_service_account_info(creds_dict)
+
+    # Carregar o arquivo Excel em um DataFrame pandas
+    df = pd.read_excel(nome_arquivo, engine='openpyxl')
+
+    # Configurar a referência da tabela no BigQuery
+    table_ref = f"{dataset_id}.{table_id}"
+
+    # Configurar o job de carregamento
+    job_config = bigquery.LoadJobConfig(
+        write_disposition=bigquery.WriteDisposition.WRITE_APPEND,  # Alternativas: WRITE_TRUNCATE, WRITE_EMPTY
+        source_format=bigquery.SourceFormat.PARQUET
+    )
+
+    # Carregar o DataFrame para o BigQuery
+    job = client.load_table_from_dataframe(df, table_ref, job_config=job_config)
+    job.result()  # Esperar o job completar
+
+    print(f"Dados enviados para {table_ref} com sucesso.")
+
 
 
 def atualizar_google_sheet(nome_arquivo, sheet_name, sheet_id, credenciais_json):
-    # Carrega as credenciais do JSON diretamente da string da variável de ambiente
     creds_dict = json.loads(credenciais_json)
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     client = gspread.authorize(creds)
-
-    # Abre a planilha pelo ID
     sheet = client.open_by_key(sheet_id)
     worksheet = sheet.worksheet(sheet_name)
-
-    # Carrega os dados do XLSX usando Pandas
     df = pd.read_excel(nome_arquivo, engine='openpyxl')
-
-    # Converte o DataFrame para lista de listas
     dados = [df.columns.values.tolist()] + df.values.tolist()
 
-
-    # Sanitizando dados
-    # sanitized_data = [[str(value) if isinstance(value, float) and (value != value or value in (float('inf'), -float('inf'))) else value for value in row] for row in dados]
-
-    # Sanitizando os dados: Substituir NaN, Infinity, -Infinity por strings vazias
     sanitized_data = [
         [
             "" if isinstance(value, float) and (value != value or value in (float('inf'), -float('inf'))) else value
@@ -280,51 +272,26 @@ def atualizar_google_sheet(nome_arquivo, sheet_name, sheet_id, credenciais_json)
         for row in dados
     ]
 
-    # Atualiza a Google Sheet com os dados
     worksheet.clear()
     worksheet.update(sanitized_data)
     print("Google Sheet atualizada com sucesso.")
 
-def delete_all_xlsx_files():
-    for file in glob.glob('*.xlsx'):
-        os.remove(file)
-    print("Arquivos .xlsx excluídos.")
+if __name__ == "__main__":
+    with requests.Session() as session:
+        csrf_token = get_csrf_token(session)
+        if perform_login(session, csrf_token):
+            print("Login realizado com sucesso.")
+            if habilitar_envio_inventario == 'SIM':
+                download_inventory(session, csrf_token)
+                # atualizar_google_sheet(nome_arquivo_inventario, nome_aba_planilha_inventario, sheet_id_inventario, credenciais_json)
+                # Enviar a primeira planilha
+                enviar_para_bigquery(nome_arquivo_inventario, 'sheets-370517.RelatorioCasaDoMedico', 'relatorio_inventario', credenciais_json)
 
-def main():
 
+            # if habilitar_envio_relatorio == 'SIM':
+            #     generate_report(session, csrf_token)
+            #     check_report_status(session, csrf_token)
+            #     atualizar_google_sheet(nome_arquivo_relatorio, nome_aba_planilha_relatorio, sheet_id_relatorio, credenciais_json)
 
-
-
-    session = requests.Session()
-    csrf_token = get_csrf_token(session)
-    if not csrf_token:
-        print("Não foi possível obter o token CSRF.")
-        return
-
-    if perform_login(session, csrf_token):
-
-        if habilitar_envio_inventario == "SIM":
-            download_inventory(session, csrf_token)
-            atualizar_google_sheet(nome_arquivo_inventario, sheet_name, sheet_id_inventario, credenciais_json)
-
-        if habilitar_envio_relatorio == "SIM":
-            report_response = generate_report(session, csrf_token)
-
-            # report_response = True
-            if report_response:
-                check_report_status(session, csrf_token)
-                if habilitar_envio_relatorio == "SIM":
-                    atualizar_google_sheet(nome_arquivo_relatorio, sheet_name, sheet_id_relatorio, credenciais_json)
-                
         else:
-            print("Falha ao gerar o relatório.")
-    else:
-        print("Falha no login.")
-        
-    try:
-        delete_all_xlsx_files()
-    except:
-        print("Sem arquivos para excluir")
-
-if __name__ == '__main__':
-    main()
+            print("Falha ao realizar login.")
